@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
-import { ref, onValue, set as firebaseSet, push, get, remove } from "firebase/database";
+import { ref, onValue, set as firebaseSet, remove } from "firebase/database";
 import { db } from "@/lib/firebase";
 
 interface Question {
@@ -29,10 +29,17 @@ export default function Page() {
 
   const joinGame = (e: FormEvent) => {
     e.preventDefault();
-    if (!userName.trim() || players.includes(userName)) return;
-    const newList = [...players, userName.trim()];
+    const name = userName.trim();
+    if (!name || players.includes(name)) return;
+    const newList = [...players, name];
     firebaseSet(playersRef, newList);
     setJoined(true);
+  };
+
+  const resetPlayers = () => {
+    remove(playersRef);
+    setJoined(false);
+    setUserName("");
   };
 
   // --- Fragen laden ---
@@ -87,7 +94,7 @@ export default function Page() {
   // Frage ziehen
   const handleHit = (index: number) => {
     if (currentQuestion) return;
-    if (!cups[index]) return; // nur aktive Becher
+    if (!cups[index]) return;
     if (pool.length === 0) return;
     const q = pool[Math.floor(Math.random() * pool.length)];
     setCurrentQuestion(q);
@@ -99,8 +106,7 @@ export default function Page() {
   // Antwort abschicken
   const submitAnswer = () => {
     if (!currentQuestion || currentIndex === null) return;
-    const correct =
-      userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
+    const correct = userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
     if (correct) {
       setFeedback("✅ Richtig! Kein Shot.");
     } else {
@@ -140,7 +146,7 @@ export default function Page() {
     return (
       <main className="p-4 max-w-md mx-auto">
         <h1 className="text-2xl font-bold mb-4">Beitreten</h1>
-        <form onSubmit={joinGame} className="flex gap-2">
+        <form onSubmit={joinGame} className="flex gap-2 mb-4">
           <input
             type="text"
             placeholder="Dein Name"
@@ -155,7 +161,10 @@ export default function Page() {
             Beitreten
           </button>
         </form>
-        <p className="mt-4">Aktuelle Spieler: {players.join(", ")}</p>
+        <p className="mb-4">Aktuelle Spieler: {players.join(", ")}</p>
+        <button onClick={resetPlayers} className="text-sm text-red-600 underline">
+          Spieler zurücksetzen
+        </button>
       </main>
     );
   }
@@ -169,33 +178,23 @@ export default function Page() {
       {/* Kategorie */}
       <select
         value={category}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-          setCategory(e.target.value)
-        }
+        onChange={(e: ChangeEvent<HTMLSelectElement>) => setCategory(e.target.value)}
         className="border rounded p-2 mb-4 w-full"
       >
         <option value="">Alle Kategorien</option>
         {categories.map(c => (
-          <option key={c} value={c}>
-            {c}
-          </option>
+          <option key={c} value={c}>{c}</option>
         ))}
       </select>
 
       {/* Teams & Starter */}
       <div className="mb-4 flex gap-2">
-        <button
-          onClick={generateTeams}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
+        <button onClick={generateTeams} className="bg-blue-500 text-white px-4 py-2 rounded">
           Teams erstellen
         </button>
         {teams && (
           <>
-            <button
-              onClick={drawStarter}
-              className="bg-green-500 text-white px-4 py-2 rounded"
-            >
+            <button onClick={drawStarter} className="bg-green-500 text-white px-4 py-2 rounded">
               Wer beginnt?
             </button>
             {starter && <span className="self-center">Team {starter} startet</span>}
@@ -206,24 +205,17 @@ export default function Page() {
         <div className="mb-6 grid grid-cols-2 gap-4">
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 1</h2>
-            {teams[0].map(n => (
-              <p key={n}>{n}</p>
-            ))}
+            {teams[0].map(n => <p key={n}>{n}</p>)}
           </div>
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 2</h2>
-            {teams[1].map(n => (
-              <p key={n}>{n}</p>
-            ))}
+            {teams[1].map(n => <p key={n}>{n}</p>)}
           </div>
         </div>
       )}
 
       {/* Reset */}
-      <button
-        onClick={resetGame}
-        className="bg-red-500 text-white px-4 py-2 rounded mb-6"
-      >
+      <button onClick={resetGame} className="bg-red-500 text-white px-4 py-2 rounded mb-6">
         Spiel zurücksetzen
       </button>
 
@@ -232,13 +224,7 @@ export default function Page() {
         <h3 className="mb-2">Team 1 Becher</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {cups.slice(0, 10).map((present, i) => (
-            <div
-              key={i}
-              className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
-                present ? "" : "opacity-30"
-              }`}
-              onClick={() => handleHit(i)}
-            >
+            <div key={i} className={`h-16 flex items-center justify-center border rounded cursor-pointer ${present ? "" : "opacity-30"}`} onClick={() => handleHit(i)}>
               {i + 1}
             </div>
           ))}
@@ -249,13 +235,7 @@ export default function Page() {
         <h3 className="mb-2">Team 2 Becher</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {cups.slice(10).map((present, i) => (
-            <div
-              key={i + 10}
-              className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
-                present ? "" : "opacity-30"
-              }`}
-              onClick={() => handleHit(i + 10)}
-            >
+            <div key={i + 10} className={`h-16 flex items-center justify-center border rounded cursor-pointer ${present ? "" : "opacity-30"}`} onClick={() => handleHit(i + 10)}>
               {i + 11}
             </div>
           ))}
@@ -267,18 +247,8 @@ export default function Page() {
         <div className="mb-4">
           <p className="mb-2 font-medium">{currentQuestion.question}</p>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={userAnswer}
-              onChange={e => setUserAnswer(e.target.value)}
-              className="border rounded p-2 flex-1"
-            />
-            <button
-              onClick={submitAnswer}
-              className="bg-indigo-600 text-white px-4 rounded"
-            >
-              Abschicken
-            </button>
+            <input type="text" value={userAnswer} onChange={e => setUserAnswer(e.target.value)} className="border rounded p-2 flex-1" />
+            <button onClick={submitAnswer} className="bg-indigo-600 text-white px-4 rounded">Abschicken</button>
           </div>
         </div>
       )}
