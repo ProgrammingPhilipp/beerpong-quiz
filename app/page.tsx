@@ -73,6 +73,21 @@ export default function Page() {
     setJoined(true);
   };
 
+  // Remove a player (host action)
+  const removePlayer = (name: string) => {
+    runTransaction(playersRef, (current) => {
+      const list: string[] = Array.isArray(current) ? current : [];
+      return list.filter((n) => n !== name);
+    });
+    // if current user removed, reset join
+    if (name === userName) {
+      localStorage.removeItem("userName");
+      setJoined(false);
+      setUserName("");
+    }
+  };
+
+
   const resetPlayers = () => {
     remove(playersRef);
     setJoined(false);
@@ -221,7 +236,10 @@ export default function Page() {
         <h2 className="font-semibold">Aktive Spieler</h2>
         <ul className="list-disc list-inside">
           {players.map((p) => (
-            <li key={p} className={p === players[currentTurnIdx] ? "font-bold" : ""}>{p}</li>
+            <li key={p} className={p === players[currentTurnIdx] ? "font-bold flex justify-between items-center" : "flex justify-between items-center"}>
+              <span>{p}</span>
+              <button onClick={() => removePlayer(p)} className="text-red-600 hover:text-red-800 ml-2">✕</button>
+            </li>
           ))}
         </ul>
         <p>Aktueller Spieler: <strong>{players[currentTurnIdx]}</strong></p>
