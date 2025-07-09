@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, ChangeEvent } from "react";
-import { ref, onValue, set as firebaseSet } from "firebase/database";
+import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { ref, onValue, set as firebaseSet, push, get, remove } from "firebase/database";
 import { db } from "@/lib/firebase";
 
 interface Question {
@@ -13,12 +13,34 @@ interface Question {
 export default function Page() {
   const gameId = "default";
 
+  // --- User Name & Join ---
+  const [userName, setUserName] = useState<string>("");
+  const [joined, setJoined] = useState(false);
+  const playersRef = ref(db, `games/${gameId}/players`);
+  const [players, setPlayers] = useState<string[]>([]);
+
+  useEffect(() => {
+    onValue(playersRef, snap => {
+      const data: string[] | null = snap.val();
+      if (data) setPlayers(data);
+      else firebaseSet(playersRef, []);
+    });
+  }, []);
+
+  const joinGame = (e: FormEvent) => {
+    e.preventDefault();
+    if (!userName.trim() || players.includes(userName)) return;
+    const newList = [...players, userName.trim()];
+    firebaseSet(playersRef, newList);
+    setJoined(true);
+  };
+
   // --- Fragen laden ---
   const [questions, setQuestions] = useState<Question[]>([]);
   useEffect(() => {
     fetch("/data/questions.json")
-      .then((r) => r.json())
-      .then((data) => setQuestions(data))
+      .then(r => r.json())
+      .then(data => setQuestions(data))
       .catch(console.error);
   }, []);
 
@@ -26,7 +48,7 @@ export default function Page() {
   const [cups, setCups] = useState<boolean[]>([]);
   useEffect(() => {
     const cupsRef = ref(db, `games/${gameId}/cups`);
-    onValue(cupsRef, (snap) => {
+    onValue(cupsRef, snap => {
       const data: boolean[] | null = snap.val();
       if (data === null) {
         firebaseSet(cupsRef, Array(20).fill(true));
@@ -37,11 +59,11 @@ export default function Page() {
   }, []);
 
   // --- Teams & Starter ---
-  const players = ["Philipp", "Marlon", "Enes", "Robin"];
   const [teams, setTeams] = useState<string[][] | null>(null);
   const [starter, setStarter] = useState<1 | 2 | null>(null);
 
   const generateTeams = () => {
+    if (players.length < 2) return;
     const shuffled = [...players].sort(() => Math.random() - 0.5);
     setTeams([shuffled.slice(0, 2), shuffled.slice(2, 4)]);
     setStarter(null);
@@ -58,10 +80,9 @@ export default function Page() {
   const [category, setCategory] = useState<string>("");
 
   // Fragen-Pool
-  const pool =
-    category
-      ? questions.filter((q) => q.category === category)
-      : questions;
+  const pool = category
+    ? questions.filter(q => q.category === category)
+    : questions;
 
   // Frage ziehen
   const handleHit = (index: number) => {
@@ -84,7 +105,6 @@ export default function Page() {
       setFeedback("✅ Richtig! Kein Shot.");
     } else {
       setFeedback(`❌ Falsch! Antwort: ${currentQuestion.answer}. Trink einen Shot!`);
-      // erst jetzt cup in DB ausgrauen
       const cupsRef = ref(db, `games/${gameId}/cups`);
       const newCups = [...cups];
       newCups[currentIndex] = false;
@@ -92,7 +112,7 @@ export default function Page() {
     }
   };
 
-  // nach Feedback fragen zurücksetzen
+  // Reset Feedback
   useEffect(() => {
     if (feedback) {
       const t = setTimeout(() => {
@@ -105,7 +125,7 @@ export default function Page() {
     }
   }, [feedback]);
 
-  // Reset
+  // Reset Game
   const resetGame = () => {
     firebaseSet(ref(db, `games/${gameId}/cups`), Array(20).fill(true));
     setCurrentQuestion(null);
@@ -115,9 +135,36 @@ export default function Page() {
 
   const categories = ["Geographie", "Allgemeinwissen", "Fußball"];
 
+  // --- Render ---
+  if (!joined) {
+    return (
+      <main className="p-4 max-w-md mx-auto">
+        <h1 className="text-2xl font-bold mb-4">Beitreten</h1>
+        <form onSubmit={joinGame} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Dein Name"
+            value={userName}
+            onChange={e => setUserName(e.target.value)}
+            className="border rounded p-2 flex-1"
+          />
+          <button
+            type="submit"
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+          >
+            Beitreten
+          </button>
+        </form>
+        <p className="mt-4">Aktuelle Spieler: {players.join(", ")}</p>
+      </main>
+    );
+  }
+
   return (
     <main className="p-4 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Beer Pong Quiz</h1>
+
+      <p className="mb-2">Eingeloggt als: <strong>{userName}</strong></p>
 
       {/* Kategorie */}
       <select
@@ -128,7 +175,7 @@ export default function Page() {
         className="border rounded p-2 mb-4 w-full"
       >
         <option value="">Alle Kategorien</option>
-        {categories.map((c) => (
+        {categories.map(c => (
           <option key={c} value={c}>
             {c}
           </option>
@@ -159,13 +206,13 @@ export default function Page() {
         <div className="mb-6 grid grid-cols-2 gap-4">
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 1</h2>
-            {teams[0].map((n) => (
+            {teams[0].map(n => (
               <p key={n}>{n}</p>
             ))}
           </div>
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 2</h2>
-            {teams[1].map((n) => (
+            {teams[1].map(n => (
               <p key={n}>{n}</p>
             ))}
           </div>
@@ -223,7 +270,7 @@ export default function Page() {
             <input
               type="text"
               value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
+              onChange={e => setUserAnswer(e.target.value)}
               className="border rounded p-2 flex-1"
             />
             <button
