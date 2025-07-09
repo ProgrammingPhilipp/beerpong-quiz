@@ -1,8 +1,36 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent, FormEvent } from "react";
-import { ref, onValue, runTransaction, set as firebaseSet, remove } from "firebase/database";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  ChangeEvent,
+  FormEvent,
+} from "react";
+import {
+  ref,
+  onValue,
+  runTransaction,
+  set as firebaseSet,
+  remove,
+} from "firebase/database";
 import { db } from "@/lib/firebase";
+import Confetti from "react-confetti";
+// custom hook for window size (replaces react-use)
+function useWindowSize() {
+  const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  useEffect(() => {
+    function handleResize() {
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return size;
+}
+
+import { useSwipeable } from "react-swipeable";
 
 interface Question {
   question: string;
@@ -30,7 +58,11 @@ export default function Page() {
 
   const [players, setPlayers] = useState<string[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, Stats>>({});
-  const [userStats, setUserStats] = useState<Stats>({ correct: 0, wrong: 0, gamesWon: 0 });
+  const [userStats, setUserStats] = useState<Stats>({
+    correct: 0,
+    wrong: 0,
+    gamesWon: 0,
+  });
   const [questions, setQuestions] = useState<Question[]>([]);
   const [cups, setCups] = useState<boolean[]>([]);
 
@@ -41,11 +73,24 @@ export default function Page() {
   const [qIndex, setQIndex] = useState<number | null>(null);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
+  const { width, height } = useWindowSize();
 
   const categories = ["Geographie", "Allgemeinwissen", "Fußball"];
   const pool = category
     ? questions.filter((q) => q.category === category)
     : questions;
+
+  // Fortschritt
+  const hitCount = 20 - cups.filter((c) => c).length;
+  const progress = (hitCount / 20) * 100;
+
+  // Swipe-Handler
+  const handlers = useSwipeable({
+    onSwipedLeft: () => setView("stats"),
+    onSwipedRight: () => setView("play"),
+    trackMouse: true,
+  });
 
   // — EFFECTS —
 
@@ -112,7 +157,6 @@ export default function Page() {
 
   // — ACTIONS —
 
-  // Join
   const joinGame = (e: FormEvent) => {
     e.preventDefault();
     const name = userName.trim();
@@ -126,14 +170,12 @@ export default function Page() {
     setJoined(true);
   };
 
-  // Remove player
   const removePlayer = (name: string) => {
     runTransaction(playersRef, (cur) =>
       Array.isArray(cur) ? cur.filter((n) => n !== name) : []
     );
   };
 
-  // Teams
   const generateTeams = () => {
     if (players.length < 2) return;
     const shuffled = [...players].sort(() => Math.random() - 0.5);
@@ -142,17 +184,16 @@ export default function Page() {
     setFeedback("");
   };
 
-  // Hit cup
   const handleHit = (i: number) => {
     if (currentQ || !cups[i] || !teams) return;
     setCurrentQ(pool[Math.floor(Math.random() * pool.length)]);
     setQIndex(i);
   };
 
-  // Submit answer
   const submitAnswer = () => {
     if (!currentQ || qIndex == null || !teams) return;
-    const ok = answer.trim().toLowerCase() === currentQ.answer.toLowerCase();
+    const ok =
+      answer.trim().toLowerCase() === currentQ.answer.toLowerCase();
     const uRef = ref(db, `${statsBase}/${userName}`);
     const ns = { ...userStats };
     ok ? ns.correct++ : ns.wrong++;
@@ -172,12 +213,16 @@ export default function Page() {
       .every((p, idx) => !p || (idx + 10 === qIndex && !ok));
     if (t1 || t2) {
       const winners = t1 ? teams[1] : teams[0];
-      winners.forEach((p) => {
+      winners.forEach((p: string) => {
         const pRef = ref(db, `${statsBase}/${p}`);
         const ps = statsMap[p] || { correct: 0, wrong: 0, gamesWon: 0 };
-        firebaseSet(pRef, { ...ps, gamesWon: (ps.gamesWon || 0) + 1 });
+        firebaseSet(pRef, {
+          ...ps,
+          gamesWon: (ps.gamesWon || 0) + 1,
+        });
       });
       setFeedback(`🏆 Team ${t1 ? 2 : 1} gewinnt!`);
+      setShowConfetti(true);
     } else {
       setTurnIndex((i) => (i + 1) % players.length);
       setFeedback(ok ? "✅ Richtig!" : "❌ Falsch!");
@@ -187,10 +232,10 @@ export default function Page() {
       setCurrentQ(null);
       setAnswer("");
       setFeedback("");
+      setShowConfetti(false);
     }, 2000);
   };
 
-  // Reset game
   const resetGame = () => {
     firebaseSet(cupsRef, Array(20).fill(true));
     setFeedback("");
@@ -199,7 +244,6 @@ export default function Page() {
   };
 
   // — RENDER —
-
   if (!joined) {
     return (
       <main className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-300 to-purple-300">
@@ -227,15 +271,29 @@ export default function Page() {
   }
 
   return (
-    <main className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* HEADER */}
+    <main
+      {...handlers}
+      className="p-6 bg-gray-50 min-h-screen overflow-x-hidden"
+    >
+      {showConfetti && (
+        <Confetti width={width} height={height} recycle={false} />
+      )}
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Progress Bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-indigo-600 h-2 rounded-full transition-width duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {/* Header & Theme Toggle */}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">BeerPong Quiz</h1>
-          <div className="flex space-x-4">
+          <div className="space-x-4">
             <button
               onClick={() => setView("play")}
-              className={`py-2 px-4 rounded-lg ${
+              className={`px-4 py-2 rounded-lg ${
                 view === "play"
                   ? "bg-indigo-600 text-white"
                   : "text-gray-600 hover:bg-gray-200"
@@ -245,7 +303,7 @@ export default function Page() {
             </button>
             <button
               onClick={() => setView("stats")}
-              className={`py-2 px-4 rounded-lg ${
+              className={`px-4 py-2 rounded-lg ${
                 view === "stats"
                   ? "bg-indigo-600 text-white"
                   : "text-gray-600 hover:bg-gray-200"
@@ -256,7 +314,7 @@ export default function Page() {
           </div>
         </div>
 
-        {/* NOTIFICATIONS */}
+        {/* Notifications */}
         {notifications.map((msg, i) => (
           <div
             key={i}
@@ -268,16 +326,16 @@ export default function Page() {
 
         {view === "play" ? (
           <>
-            {/* PLAYERS */}
+            {/* Players */}
             <div className="flex flex-wrap gap-2">
-              {players.map((p) => (
+              {players.map((p: string, idx: number) => (
                 <div
                   key={p}
                   className={`flex items-center space-x-2 px-4 py-1 rounded-full ${
-                    p === players[turnIndex] ? "bg-indigo-200" : "bg-gray-200"
+                    idx === turnIndex ? "bg-indigo-200" : "bg-gray-200"
                   }`}
                 >
-                  <span className="font-medium">{p}</span>
+                  <span>{p}</span>
                   <button
                     onClick={() => removePlayer(p)}
                     className="text-red-500 hover:text-red-700"
@@ -288,15 +346,17 @@ export default function Page() {
               ))}
             </div>
 
-            {/* QUIZ CONTROLS */}
+            {/* Quiz Controls */}
             <div className="grid sm:grid-cols-2 gap-4 mb-4">
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                  setCategory(e.target.value)
+                }
                 className="p-3 border-2 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Alle Kategorien</option>
-                {categories.map((c) => (
+                {categories.map((c: string) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
@@ -308,16 +368,16 @@ export default function Page() {
               </button>
             </div>
 
-            {/* TEAMS */}
+            {/* Teams */}
             {teams && (
               <div className="grid grid-cols-2 gap-6 mb-6">
-                {teams.map((t, i) => (
+                {teams.map((t: string[], i: number) => (
                   <div
                     key={i}
                     className="bg-white p-4 rounded-xl shadow-md hover:shadow-xl transition"
                   >
                     <h2 className="font-semibold mb-2">Team {i + 1}</h2>
-                    {t.map((n) => (
+                    {t.map((n: string) => (
                       <p key={n}>{n}</p>
                     ))}
                   </div>
@@ -325,16 +385,18 @@ export default function Page() {
               </div>
             )}
 
-            {/* CUPS */}
+            {/* Cups */}
             <div className="mt-6 space-y-4">
-              {[0, 10].map((offset) => (
+              {[0, 10].map((offset: number) => (
                 <div key={offset} className="grid grid-cols-5 gap-3">
-                  {cups.slice(offset, offset + 10).map((ok, i) => (
+                  {cups.slice(offset, offset + 10).map((ok, i: number) => (
                     <div
                       key={i}
                       onClick={() => handleHit(offset + i)}
                       className={`aspect-square flex items-center justify-center text-xl font-bold rounded-lg cursor-pointer transition ${
-                        ok ? "bg-yellow-300 hover:bg-yellow-400" : "bg-gray-300 opacity-50"
+                        ok
+                          ? "bg-yellow-300 hover:bg-yellow-400"
+                          : "bg-gray-300 opacity-50"
                       }`}
                     >
                       {offset + i + 1}
@@ -344,7 +406,7 @@ export default function Page() {
               ))}
             </div>
 
-            {/* QUESTION */}
+            {/* Question */}
             {currentQ && (
               <div className="mt-6 bg-white p-6 rounded-xl shadow-lg">
                 <p className="text-xl mb-4">{currentQ.question}</p>
@@ -366,14 +428,14 @@ export default function Page() {
               </div>
             )}
 
-            {/* FEEDBACK */}
+            {/* Feedback */}
             {feedback && (
               <div className="mt-4 p-4 bg-indigo-100 text-indigo-800 rounded-lg text-center">
                 {feedback}
               </div>
             )}
 
-            {/* RESET */}
+            {/* Reset */}
             <div className="mt-6 text-right">
               <button
                 onClick={resetGame}
@@ -388,7 +450,7 @@ export default function Page() {
           <div>
             <h2 className="text-2xl font-semibold mb-6">Statistiken</h2>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {players.map((p) => {
+              {players.map((p: string) => {
                 const s = statsMap[p] || { correct: 0, wrong: 0, gamesWon: 0 };
                 return (
                   <li
