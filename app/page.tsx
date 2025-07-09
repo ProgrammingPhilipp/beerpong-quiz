@@ -1,6 +1,9 @@
+// app/page.tsx
 "use client";
 
 import React, { useState, useEffect, ChangeEvent } from "react";
+import { ref, onValue, set as firebaseSet } from "firebase/database";
+import { db } from "@/lib/firebase";
 
 interface Question {
   question: string;
@@ -9,8 +12,34 @@ interface Question {
 }
 
 export default function Page() {
+  const gameId = "default"; // später mehrere Spiele möglich
+
+  // Fragen laden
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [cups, setCups] = useState<boolean[]>(Array(20).fill(true));
+  useEffect(() => {
+    fetch("/data/questions.json")
+      .then((res) => res.json())
+      .then((data: Question[]) => setQuestions(data))
+      .catch((err) => console.error("Fehler beim Laden der Fragen:", err));
+  }, []);
+
+  // Cups via Firebase statt lokal
+  const [cups, setCups] = useState<boolean[]>([]);
+  useEffect(() => {
+    const cupsRef = ref(db, `games/${gameId}/cups`);
+    onValue(cupsRef, (snap) => {
+      const data: boolean[] | null = snap.val();
+      if (data === null) {
+        // initial alle Becher aktiv
+        firebaseSet(cupsRef, Array(20).fill(true));
+      } else {
+        setCups(data);
+      }
+    });
+    // kein Cleanup nötig für onValue hier
+  }, []);
+
+  // Quiz-State
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
@@ -19,24 +48,26 @@ export default function Page() {
   const [starter, setStarter] = useState<number | null>(null);
   const [category, setCategory] = useState<string>("");
 
-  // Fragen laden
-  useEffect(() => {
-    fetch("/data/questions.json")
-      .then((res) => res.json())
-      .then((data: Question[]) => setQuestions(data))
-      .catch((err) => console.error("Fehler beim Laden der Fragen:", err));
-  }, []);
+  // Pool (gefiltert oder gesamter Fragen-Pool)
+  const pool = category
+    ? questions.filter((q) => q.category === category)
+    : questions;
 
-  const filtered = questions.filter((q) => q.category === category);
-
+  // Treffer behandeln und in Firebase schreiben
   const handleHit = (index: number) => {
-    if (!category || currentQuestion) return;
-    if (filtered.length === 0) return;
-    const q = filtered[Math.floor(Math.random() * filtered.length)];
+    if (currentQuestion) return;
+    if (pool.length === 0) return;
+
+    const q = pool[Math.floor(Math.random() * pool.length)];
     setCurrentQuestion(q);
     setCurrentIndex(index);
     setUserAnswer("");
     setFeedback("");
+
+    // Becher-Status aktualisieren
+    const newCups = [...cups];
+    newCups[index] = false;
+    firebaseSet(ref(db, `games/${gameId}/cups`), newCups);
   };
 
   const submitAnswer = () => {
@@ -49,9 +80,7 @@ export default function Page() {
       setFeedback(
         `Falsch! Richtige Antwort: ${currentQuestion.answer}. Trink einen Shot! 🍻`
       );
-      setCups((prev) =>
-        prev.map((c, i) => (i === currentIndex ? false : c))
-      );
+      // (Becher ist ja schon in Firebase gesetzt)
     }
   };
 
@@ -106,7 +135,7 @@ export default function Page() {
 
       {/* Team-Generator */}
       <div className="mb-8">
-        <h2 className="text-xl mb-2">Teams & Start</h2>
+        <h2 className="text-xl mb-2">Teams &amp; Start</h2>
         <button
           onClick={generateTeams}
           className="mr-2 px-6 py-3 bg-blue-500 text-white rounded text-base"
@@ -121,9 +150,7 @@ export default function Page() {
             >
               Wer beginnt?
             </button>
-            {starter !== null && (
-              <p className="mt-2">Team {starter} beginnt!</p>
-            )}
+            {starter !== null && <p className="mt-2">Team {starter} beginnt!</p>}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="border rounded p-4">
                 <h3 className="font-medium">Team 1</h3>
@@ -142,7 +169,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* Becher-Anzeige Team 1 */}
+      {/* Becher Team 1 */}
       <h2 className="text-lg mb-2">Team 1 Becher</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
         {cups.slice(0, 10).map((present, i) => (
@@ -158,7 +185,7 @@ export default function Page() {
         ))}
       </div>
 
-      {/* Becher-Anzeige Team 2 */}
+      {/* Becher Team 2 */}
       <h2 className="text-lg mb-2">Team 2 Becher</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
         {cups.slice(10).map((present, i) => (
