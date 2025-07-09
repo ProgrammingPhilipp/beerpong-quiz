@@ -13,7 +13,7 @@ interface Question {
 export default function Page() {
   const gameId = "default";
 
-  // --- FRAGEN LADEN ---
+  // --- Fragen laden ---
   const [questions, setQuestions] = useState<Question[]>([]);
   useEffect(() => {
     fetch("/data/questions.json")
@@ -22,14 +22,13 @@ export default function Page() {
       .catch(console.error);
   }, []);
 
-  // --- CUPS ÜBER FIREBASE ---
+  // --- Cups über Firebase ---
   const [cups, setCups] = useState<boolean[]>([]);
   useEffect(() => {
     const cupsRef = ref(db, `games/${gameId}/cups`);
     onValue(cupsRef, (snap) => {
       const data: boolean[] | null = snap.val();
       if (data === null) {
-        // initial Fill
         firebaseSet(cupsRef, Array(20).fill(true));
       } else {
         setCups(data);
@@ -37,23 +36,38 @@ export default function Page() {
     });
   }, []);
 
-  // --- QUIZ STATE ---
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [currentIndex, setCurrentIndex] = useState<number | null>(null);
+  // --- Teams & Starter ---
+  const players = ["Philipp", "Marlon", "Enes", "Robin"];
+  const [teams, setTeams] = useState<string[][] | null>(null);
+  const [starter, setStarter] = useState<1|2|null>(null);
+
+  const generateTeams = () => {
+    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    setTeams([shuffled.slice(0,2), shuffled.slice(2,4)]);
+    setStarter(null);
+  };
+  const drawStarter = () => {
+    setStarter(Math.floor(Math.random()*2) + 1 as 1|2);
+  };
+
+  // --- Quiz State ---
+  const [currentQuestion, setCurrentQuestion] = useState<Question|null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number|null>(null);
   const [userAnswer, setUserAnswer] = useState("");
   const [feedback, setFeedback] = useState("");
   const [category, setCategory] = useState<string>("");
 
-  // Pool nach Kategorie
-  const pool = category
-    ? questions.filter((q) => q.category === category)
+  // Fragen-Pool
+  const pool = category 
+    ? questions.filter(q => q.category === category)
     : questions;
 
-  // Treffer: nur Frage ziehen, nicht grayout
+  // Frage ziehen
   const handleHit = (index: number) => {
     if (currentQuestion) return;
+    if (!cups[index]) return;        // nur aktive Becher
     if (pool.length === 0) return;
-    const q = pool[Math.floor(Math.random() * pool.length)];
+    const q = pool[Math.floor(Math.random()*pool.length)];
     setCurrentQuestion(q);
     setCurrentIndex(index);
     setUserAnswer("");
@@ -63,14 +77,12 @@ export default function Page() {
   // Antwort abschicken
   const submitAnswer = () => {
     if (!currentQuestion || currentIndex === null) return;
-    const correct =
-      userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
-
+    const correct = userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
     if (correct) {
       setFeedback("✅ Richtig! Kein Shot.");
     } else {
       setFeedback(`❌ Falsch! Antwort: ${currentQuestion.answer}. Trink einen Shot!`);
-      // erst jetzt den Becher in Firebase auf false setzen
+      // erst jetzt cup in DB ausgrauen
       const cupsRef = ref(db, `games/${gameId}/cups`);
       const newCups = [...cups];
       newCups[currentIndex] = false;
@@ -78,67 +90,110 @@ export default function Page() {
     }
   };
 
-  // Reset-Funktion
+  // nach Feedback fragen zurücksetzen
+  useEffect(()=>{
+    if (feedback){
+      const t = setTimeout(()=>{
+        setCurrentQuestion(null);
+        setCurrentIndex(null);
+        setUserAnswer("");
+        setFeedback("");
+      },2000);
+      return ()=>clearTimeout(t);
+    }
+  },[feedback]);
+
+  // Reset
   const resetGame = () => {
-    const cupsRef = ref(db, `games/${gameId}/cups`);
-    firebaseSet(cupsRef, Array(20).fill(true));
+    firebaseSet(ref(db, `games/${gameId}/cups`), Array(20).fill(true));
     setCurrentQuestion(null);
-    setCurrentIndex(null);
     setUserAnswer("");
     setFeedback("");
   };
 
-  // Feedback-Clear nach 2s
-  useEffect(() => {
-    if (feedback) {
-      const t = setTimeout(() => setFeedback(""), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [feedback]);
-
-  const categories = ["Geographie", "Allgemeinwissen", "Fußball"];
+  const categories = ["Geographie","Allgemeinwissen","Fußball"];
 
   return (
-    <main className="p-4 max-w-2xl mx-auto">
+    <main className="p-4 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Beer Pong Quiz</h1>
 
       {/* Kategorie */}
       <select
         value={category}
-        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-          setCategory(e.target.value)
-        }
+        onChange={(e:ChangeEvent<HTMLSelectElement>)=>setCategory(e.target.value)}
         className="border rounded p-2 mb-4 w-full"
       >
         <option value="">Alle Kategorien</option>
-        {categories.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
+        {categories.map(c=>(
+          <option key={c} value={c}>{c}</option>
         ))}
       </select>
 
+      {/* Teams & Starter */}
+      <div className="mb-4 flex gap-2">
+        <button onClick={generateTeams} className="bg-blue-500 text-white px-4 py-2 rounded">
+          Teams erstellen
+        </button>
+        {teams && (
+          <>
+            <button onClick={drawStarter} className="bg-green-500 text-white px-4 py-2 rounded">
+              Wer beginnt?
+            </button>
+            {starter && <span className="self-center">Team {starter} startet</span>}
+          </>
+        )}
+      </div>
+      {teams && (
+        <div className="mb-6 grid grid-cols-2 gap-4">
+          <div className="border p-2 rounded">
+            <h2 className="font-semibold">Team 1</h2>
+            {teams[0].map(n=> <p key={n}>{n}</p>)}
+          </div>
+          <div className="border p-2 rounded">
+            <h2 className="font-semibold">Team 2</h2>
+            {teams[1].map(n=> <p key={n}>{n}</p>)}
+          </div>
+        </div>
+      )}
+
       {/* Reset */}
-      <button
-        onClick={resetGame}
-        className="bg-red-500 text-white rounded px-4 py-2 mb-4"
-      >
+      <button onClick={resetGame} className="bg-red-500 text-white px-4 py-2 rounded mb-6">
         Spiel zurücksetzen
       </button>
 
-      {/* Becher-Gitter */}
-      <div className="grid grid-cols-5 gap-2 mb-6">
-        {cups.map((present, i) => (
-          <div
-            key={i}
-            className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
-              !present ? "opacity-30" : ""
-            }`}
-            onClick={() => present && handleHit(i)}
-          >
-            {i + 1}
-          </div>
-        ))}
+      {/* Becher-Grids */}
+      <div className="mb-6">
+        <h3 className="mb-2">Team 1 Becher</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {cups.slice(0,10).map((present,i)=>(
+            <div
+              key={i}
+              className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
+                present?"":"opacity-30"
+              }`}
+              onClick={()=>handleHit(i)}
+            >
+              {i+1}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="mb-2">Team 2 Becher</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {cups.slice(10).map((present,i)=>(
+            <div
+              key={i+10}
+              className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
+                present?"":"opacity-30"
+              }`}
+              onClick={()=>handleHit(i+10)}
+            >
+              {i+11}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Frage & Antwort */}
@@ -149,13 +204,10 @@ export default function Page() {
             <input
               type="text"
               value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
+              onChange={e=>setUserAnswer(e.target.value)}
               className="border rounded p-2 flex-1"
             />
-            <button
-              onClick={submitAnswer}
-              className="bg-blue-600 text-white rounded px-4"
-            >
+            <button onClick={submitAnswer} className="bg-indigo-600 text-white px-4 rounded">
               Abschicken
             </button>
           </div>
@@ -164,7 +216,7 @@ export default function Page() {
 
       {/* Feedback */}
       {feedback && (
-        <div className="p-3 bg-gray-100 rounded text-center">{feedback}</div>
+        <div className="p-3 bg-gray-100 rounded text-center mb-4">{feedback}</div>
       )}
     </main>
   );
