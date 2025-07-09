@@ -42,9 +42,16 @@ export default function Page() {
     e.preventDefault();
     const name = userName.trim();
     if (!name || players.includes(name)) return;
-    firebaseSet(playersRef, [...players, name]);
+    // update Firebase and local state
+    const newList = [...players, name];
+    firebaseSet(playersRef, newList);
+    setPlayers(newList);
+    // remember join
+    localStorage.setItem('userName', name);
     setJoined(true);
   };
+
+  // logout/reset join
   const resetPlayers = () => {
     remove(playersRef);
     setJoined(false);
