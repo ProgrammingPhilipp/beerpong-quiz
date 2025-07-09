@@ -59,6 +59,23 @@ export default function Page() {
     }
   }, [notifications]);
 
+  // If user removed or no players left, reset join
+  useEffect(() => {
+    if (joined && !players.includes(userName)) {
+      localStorage.removeItem("userName");
+      setJoined(false);
+      setUserName("");
+    }
+  }, [players, joined, userName]);
+
+  // Auto-clear notifications
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const t = setTimeout(() => setNotifications((n) => n.slice(1)), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [notifications]);
+
   // Join game with transaction
   const joinGame = (e: FormEvent) => {
     e.preventDefault();
