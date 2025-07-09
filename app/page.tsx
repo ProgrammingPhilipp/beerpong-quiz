@@ -25,15 +25,33 @@ export default function Page() {
   const statsRefPath = `games/${gameId}/stats/${userName}`;
 
   const [players, setPlayers] = useState<string[]>([]);
+  // Notifications for joins
+  const [notifications, setNotifications] = useState<string[]>([]);
+  // track previous players
+  const prevPlayersRef = React.useRef<string[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, Stats>>({});
   const [stats, setStats] = useState<Stats>({ correct: 0, wrong: 0, gamesWon: 0 });
 
   // Load players
   useEffect(() => {
+    // restore previous join from localStorage
+    const stored = localStorage.getItem("userName");
+    if (stored) {
+      setUserName(stored);
+      setJoined(true);
+    }
     onValue(playersRef, (snap) => {
       const data: string[] | null = snap.val();
-      if (Array.isArray(data)) setPlayers(data);
-      else firebaseSet(playersRef, []);
+      const list = Array.isArray(data) ? data : [];
+      // detect new joiners
+      const prev = prevPlayersRef.current;
+      list.forEach((name) => {
+        if (!prev.includes(name)) {
+          setNotifications((notifs) => [...notifs, `${name} ist beigetreten`]);
+        }
+      });
+      prevPlayersRef.current = list;
+      setPlayers(list);
     });
   }, []);
 
@@ -69,6 +87,16 @@ export default function Page() {
       }
     });
   }, [joined, userName]);
+
+  // Auto-clear notifications
+  useEffect(() => {
+    if (notifications.length) {
+      const t = setTimeout(() => {
+        setNotifications((n) => n.slice(1));
+      }, 3000);
+      return () => clearTimeout(t);
+    }
+  }, [notifications]);
 
   // --- Fragen laden ---
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -203,6 +231,12 @@ export default function Page() {
   // --- Render: Quiz ---
   return (
     <main className="p-4 max-w-3xl mx-auto">
+      {/* Notifications */}
+      {notifications.map((msg, i) => (
+        <div key={i} className="p-2 mb-2 bg-blue-100 text-blue-800 rounded">
+          {msg}
+        </div>
+      ))}
       {/* Players online */}
       <div className="mb-4">
         <h2 className="font-semibold">Aktive Spieler</h2>
