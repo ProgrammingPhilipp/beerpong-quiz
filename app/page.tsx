@@ -39,35 +39,36 @@ export default function Page() {
   // --- Teams & Starter ---
   const players = ["Philipp", "Marlon", "Enes", "Robin"];
   const [teams, setTeams] = useState<string[][] | null>(null);
-  const [starter, setStarter] = useState<1|2|null>(null);
+  const [starter, setStarter] = useState<1 | 2 | null>(null);
 
   const generateTeams = () => {
     const shuffled = [...players].sort(() => Math.random() - 0.5);
-    setTeams([shuffled.slice(0,2), shuffled.slice(2,4)]);
+    setTeams([shuffled.slice(0, 2), shuffled.slice(2, 4)]);
     setStarter(null);
   };
   const drawStarter = () => {
-    setStarter(Math.floor(Math.random()*2) + 1 as 1|2);
+    setStarter((Math.floor(Math.random() * 2) + 1) as 1 | 2);
   };
 
   // --- Quiz State ---
-  const [currentQuestion, setCurrentQuestion] = useState<Question|null>(null);
-  const [currentIndex, setCurrentIndex] = useState<number|null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
   const [feedback, setFeedback] = useState("");
   const [category, setCategory] = useState<string>("");
 
   // Fragen-Pool
-  const pool = category 
-    ? questions.filter(q => q.category === category)
-    : questions;
+  const pool =
+    category
+      ? questions.filter((q) => q.category === category)
+      : questions;
 
   // Frage ziehen
   const handleHit = (index: number) => {
     if (currentQuestion) return;
-    if (!cups[index]) return;        // nur aktive Becher
+    if (!cups[index]) return; // nur aktive Becher
     if (pool.length === 0) return;
-    const q = pool[Math.floor(Math.random()*pool.length)];
+    const q = pool[Math.floor(Math.random() * pool.length)];
     setCurrentQuestion(q);
     setCurrentIndex(index);
     setUserAnswer("");
@@ -77,7 +78,8 @@ export default function Page() {
   // Antwort abschicken
   const submitAnswer = () => {
     if (!currentQuestion || currentIndex === null) return;
-    const correct = userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
+    const correct =
+      userAnswer.trim().toLowerCase() === currentQuestion.answer.toLowerCase();
     if (correct) {
       setFeedback("✅ Richtig! Kein Shot.");
     } else {
@@ -91,17 +93,17 @@ export default function Page() {
   };
 
   // nach Feedback fragen zurücksetzen
-  useEffect(()=>{
-    if (feedback){
-      const t = setTimeout(()=>{
+  useEffect(() => {
+    if (feedback) {
+      const t = setTimeout(() => {
         setCurrentQuestion(null);
         setCurrentIndex(null);
         setUserAnswer("");
         setFeedback("");
-      },2000);
-      return ()=>clearTimeout(t);
+      }, 2000);
+      return () => clearTimeout(t);
     }
-  },[feedback]);
+  }, [feedback]);
 
   // Reset
   const resetGame = () => {
@@ -111,7 +113,7 @@ export default function Page() {
     setFeedback("");
   };
 
-  const categories = ["Geographie","Allgemeinwissen","Fußball"];
+  const categories = ["Geographie", "Allgemeinwissen", "Fußball"];
 
   return (
     <main className="p-4 max-w-3xl mx-auto">
@@ -120,23 +122,33 @@ export default function Page() {
       {/* Kategorie */}
       <select
         value={category}
-        onChange={(e:ChangeEvent<HTMLSelectElement>)=>setCategory(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+          setCategory(e.target.value)
+        }
         className="border rounded p-2 mb-4 w-full"
       >
         <option value="">Alle Kategorien</option>
-        {categories.map(c=>(
-          <option key={c} value={c}>{c}</option>
+        {categories.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
         ))}
       </select>
 
       {/* Teams & Starter */}
       <div className="mb-4 flex gap-2">
-        <button onClick={generateTeams} className="bg-blue-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={generateTeams}
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+        >
           Teams erstellen
         </button>
         {teams && (
           <>
-            <button onClick={drawStarter} className="bg-green-500 text-white px-4 py-2 rounded">
+            <button
+              onClick={drawStarter}
+              className="bg-green-500 text-white px-4 py-2 rounded"
+            >
               Wer beginnt?
             </button>
             {starter && <span className="self-center">Team {starter} startet</span>}
@@ -147,17 +159,24 @@ export default function Page() {
         <div className="mb-6 grid grid-cols-2 gap-4">
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 1</h2>
-            {teams[0].map(n=> <p key={n}>{n}</p>)}
+            {teams[0].map((n) => (
+              <p key={n}>{n}</p>
+            ))}
           </div>
           <div className="border p-2 rounded">
             <h2 className="font-semibold">Team 2</h2>
-            {teams[1].map(n=> <p key={n}>{n}</p>)}
+            {teams[1].map((n) => (
+              <p key={n}>{n}</p>
+            ))}
           </div>
         </div>
       )}
 
       {/* Reset */}
-      <button onClick={resetGame} className="bg-red-500 text-white px-4 py-2 rounded mb-6">
+      <button
+        onClick={resetGame}
+        className="bg-red-500 text-white px-4 py-2 rounded mb-6"
+      >
         Spiel zurücksetzen
       </button>
 
@@ -165,15 +184,15 @@ export default function Page() {
       <div className="mb-6">
         <h3 className="mb-2">Team 1 Becher</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {cups.slice(0,10).map((present,i)=>(
+          {cups.slice(0, 10).map((present, i) => (
             <div
               key={i}
               className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
-                present?"":"opacity-30"
+                present ? "" : "opacity-30"
               }`}
-              onClick={()=>handleHit(i)}
+              onClick={() => handleHit(i)}
             >
-              {i+1}
+              {i + 1}
             </div>
           ))}
         </div>
@@ -182,15 +201,15 @@ export default function Page() {
       <div className="mb-6">
         <h3 className="mb-2">Team 2 Becher</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {cups.slice(10).map((present,i)=>(
+          {cups.slice(10).map((present, i) => (
             <div
-              key={i+10}
+              key={i + 10}
               className={`h-16 flex items-center justify-center border rounded cursor-pointer ${
-                present?"":"opacity-30"
+                present ? "" : "opacity-30"
               }`}
-              onClick={()=>handleHit(i+10)}
+              onClick={() => handleHit(i + 10)}
             >
-              {i+11}
+              {i + 11}
             </div>
           ))}
         </div>
@@ -204,10 +223,13 @@ export default function Page() {
             <input
               type="text"
               value={userAnswer}
-              onChange={e=>setUserAnswer(e.target.value)}
+              onChange={(e) => setUserAnswer(e.target.value)}
               className="border rounded p-2 flex-1"
             />
-            <button onClick={submitAnswer} className="bg-indigo-600 text-white px-4 rounded">
+            <button
+              onClick={submitAnswer}
+              className="bg-indigo-600 text-white px-4 rounded"
+            >
               Abschicken
             </button>
           </div>
@@ -216,7 +238,7 @@ export default function Page() {
 
       {/* Feedback */}
       {feedback && (
-        <div className="p-3 bg-gray-100 rounded text-center mb-4">{feedback}</div>
+        <div className="p-3 bg-gray-100 text-gray-900 rounded text-center mb-4">{feedback}</div>
       )}
     </main>
   );
