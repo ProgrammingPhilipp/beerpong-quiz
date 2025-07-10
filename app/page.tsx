@@ -276,27 +276,7 @@ export default function Page() {
       {...handlers}
       className="p-6 bg-gray-50 min-h-screen overflow-x-hidden"
     >
-      {/* ▶ DEBUG CONTROLS — zum Testen, dann wieder entfernen */}
-<div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
-  <button
-    onClick={() => setShowConfetti(true)}
-    className="px-3 py-1 bg-green-500 text-white rounded"
-  >
-    🎉 Confetti testen
-  </button>
-  <button
-    onClick={() => console.log("Progress:", progress)}
-    className="px-3 py-1 bg-blue-500 text-white rounded"
-  >
-    📊 Progress prüfen
-  </button>
-  <button
-    onClick={() => setView(view === "play" ? "stats" : "play")}
-    className="px-3 py-1 bg-purple-500 text-white rounded"
-  >
-    🔄 Swipe simulieren
-  </button>
-</div>
+      
       {showConfetti && (
         <Confetti width={width} height={height} recycle={false} />
       )}
