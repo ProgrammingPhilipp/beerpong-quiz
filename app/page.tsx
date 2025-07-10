@@ -178,12 +178,13 @@ export default function Page() {
   };
 
   const generateTeams = () => {
-    if (players.length < 2) return;
-    const shuffled = [...players].sort(() => Math.random() - 0.5);
-    setTeams([shuffled.slice(0, 2), shuffled.slice(2, 4)]);
-    setTurnIndex(0);
-    setFeedback("");
-  };
+  if (players.length < 2) return;
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  setTeams([shuffled.slice(0, 2), shuffled.slice(2, 4)]);
+  setTurnIndex(0);
+  setFeedback(`Team 1 beginnt: ${shuffled.slice(0, 2).join(", ")}`);
+};
+
 
   const handleHit = (i: number) => {
     if (currentQ || !cups[i] || !teams) return;
@@ -371,21 +372,16 @@ export default function Page() {
             </div>
 
             {/* Teams */}
-            {teams && (
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                {teams.map((t: string[], i: number) => (
-                  <div
-                    key={i}
-                    className="bg-white p-4 rounded-xl shadow-md hover:shadow-xl transition"
-                  >
-                    <h2 className="font-semibold mb-2">Team {i + 1}</h2>
-                    {t.map((n: string) => (
-                      <p key={n}>{n}</p>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
+        {teams && (
+  <div className="mb-4 font-semibold text-lg">
+    Aktueller Zug:{" "}
+    <span className="text-indigo-600">
+      {players[turnIndex]}
+    </span>{" "}
+    (Team {teams.findIndex((t) => t.includes(players[turnIndex])) + 1})
+  </div>
+)}
+
 
             {/* Cups */}
             <div className="mt-6 space-y-4">
@@ -409,26 +405,33 @@ export default function Page() {
             </div>
 
             {/* Question */}
-            {currentQ && (
-              <div className="mt-6 bg-white p-6 rounded-xl shadow-lg">
-                <p className="text-xl mb-4">{currentQ.question}</p>
-                <div className="flex space-x-4">
-                  <input
-                    type="text"
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    placeholder="Antwort"
-                    className="flex-1 p-3 border-2 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    onClick={submitAnswer}
-                    className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                  >
-                    Abschicken
-                  </button>
-                </div>
-              </div>
-            )}
+         {currentQ && players[turnIndex] === userName && (
+  <div className="mt-6 bg-white p-6 rounded-xl shadow-lg">
+    <p className="text-xl mb-4">{currentQ.question}</p>
+    <div className="flex space-x-4">
+      <input
+        type="text"
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        placeholder="Antwort"
+        className="flex-1 p-3 border-2 rounded-lg focus:ring-2 focus:ring-indigo-500"
+      />
+      <button
+        onClick={submitAnswer}
+        className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600"
+      >
+        Abschicken
+      </button>
+    </div>
+  </div>
+)}
+
+{currentQ && players[turnIndex] !== userName && (
+  <div className="mt-6 p-6 bg-gray-200 rounded-xl text-center text-gray-600">
+    Es ist gerade nicht dein Zug. Warte bitte.
+  </div>
+)}
+
 
             {/* Feedback */}
             {feedback && (
