@@ -33,6 +33,7 @@ function useWindowSize() {
 }
 
 
+
 interface Question {
   question: string;
   answer: string;
@@ -49,6 +50,11 @@ export default function Page() {
   const playersRef = ref(db, `games/${gameId}/players`);
   const cupsRef = ref(db, `games/${gameId}/cups`);
   const statsBase = `games/${gameId}/stats`;
+  const [scores, setScores] = useState<number[]>([0, 0]);
+  const [answeredThisTurn, setAnsweredThisTurn] = useState(false);
+
+  
+
 
   // — STATES —
   const [userName, setUserName] = useState("");
@@ -82,6 +88,10 @@ export default function Page() {
     ? questions.filter((q) => q.category === category)
     : questions;
 
+    useEffect(() => {
+  setAnsweredThisTurn(false);
+}, [turnIndex]);
+
   // Fortschritt
   const hitCount = 20 - cups.filter((c) => c).length;
   const progress = (hitCount / 20) * 100;
@@ -95,6 +105,14 @@ export default function Page() {
 
   // — EFFECTS —
 
+  const resetGame = () => {
+  firebaseSet(cupsRef, Array(20).fill(true));
+  setFeedback("");
+  setCurrentQ(null);
+  setAnswer("");
+  setTurnIndex(0);
+  setAnsweredThisTurn(false);
+};
   // Players + Notifications
   useEffect(() => {
     const stored = localStorage.getItem("userName");
@@ -193,57 +211,69 @@ export default function Page() {
   };
 
   const submitAnswer = () => {
-    if (!currentQ || qIndex == null || !teams) return;
-    const ok =
-      answer.trim().toLowerCase() === currentQ.answer.toLowerCase();
-    const uRef = ref(db, `${statsBase}/${userName}`);
-    const ns = { ...userStats };
-    ok ? ns.correct++ : ns.wrong++;
-    firebaseSet(uRef, ns);
+  if (answeredThisTurn) return;  // 1x Antwort pro Runde
+  if (!currentQ || qIndex == null || !teams) return;
 
-    if (!ok) {
-      const nc = [...cups];
-      nc[qIndex] = false;
-      firebaseSet(cupsRef, nc);
-    }
+  const ok = answer.trim().toLowerCase() === currentQ.answer.toLowerCase();
 
-    const t1 = cups
-      .slice(0, 10)
-      .every((p, idx) => !p || (idx === qIndex && !ok));
-    const t2 = cups
-      .slice(10)
-      .every((p, idx) => !p || (idx + 10 === qIndex && !ok));
-    if (t1 || t2) {
-      const winners = t1 ? teams[1] : teams[0];
-      winners.forEach((p: string) => {
-        const pRef = ref(db, `${statsBase}/${p}`);
-        const ps = statsMap[p] || { correct: 0, wrong: 0, gamesWon: 0 };
-        firebaseSet(pRef, {
-          ...ps,
-          gamesWon: (ps.gamesWon || 0) + 1,
-        });
+  const uRef = ref(db, `${statsBase}/${userName}`);
+  const ns = { ...userStats };
+  ok ? ns.correct++ : ns.wrong++;
+  firebaseSet(uRef, ns);
+
+  if (!ok) {
+    const nc = [...cups];
+    nc[qIndex] = false;
+    firebaseSet(cupsRef, nc);
+  }
+
+  // Punkte updaten, wenn richtig (Team finden, das dran ist)
+  if (ok) {
+    // Welches Team ist gerade dran? 
+    // Angenommen, `turnIndex` ist der Index des aktuellen Spielers in `players`
+    const currentPlayer = players[turnIndex];
+    const currentTeamIndex = teams.findIndex(team => team.includes(currentPlayer));
+
+    setScores((prev) => {
+      const copy = [...prev];
+      copy[currentTeamIndex] = (copy[currentTeamIndex] ?? 0) + 1;
+      return copy;
+    });
+  }
+
+  const t1 = cups
+    .slice(0, 10)
+    .every((p, idx) => !p || (idx === qIndex && !ok));
+  const t2 = cups
+    .slice(10)
+    .every((p, idx) => !p || (idx + 10 === qIndex && !ok));
+  if (t1 || t2) {
+    const winners = t1 ? teams[1] : teams[0];
+    winners.forEach((p: string) => {
+      const pRef = ref(db, `${statsBase}/${p}`);
+      const ps = statsMap[p] || { correct: 0, wrong: 0, gamesWon: 0 };
+      firebaseSet(pRef, {
+        ...ps,
+        gamesWon: (ps.gamesWon || 0) + 1,
       });
-      setFeedback(`🏆 Team ${t1 ? 2 : 1} gewinnt!`);
-      setShowConfetti(true);
-    } else {
-      setTurnIndex((i) => (i + 1) % players.length);
-      setFeedback(ok ? "✅ Richtig!" : "❌ Falsch!");
-    }
+    });
+    setFeedback(`🏆 Team ${t1 ? 2 : 1} gewinnt!`);
+    setShowConfetti(true);
+  } else {
+    setTurnIndex((i) => (i + 1) % players.length);
+    setFeedback(ok ? "✅ Richtig!" : "❌ Falsch!");
+  }
 
-    setTimeout(() => {
-      setCurrentQ(null);
-      setAnswer("");
-      setFeedback("");
-      setShowConfetti(false);
-    }, 2000);
-  };
+  setAnsweredThisTurn(true);  // Sperre setzen
 
-  const resetGame = () => {
-    firebaseSet(cupsRef, Array(20).fill(true));
-    setFeedback("");
+  setTimeout(() => {
     setCurrentQ(null);
     setAnswer("");
-  };
+    setFeedback("");
+    setShowConfetti(false);
+  }, 2000);
+};
+
 
   // — RENDER —
   if (!joined) {
@@ -372,15 +402,41 @@ export default function Page() {
             </div>
 
             {/* Teams */}
-        {teams && (
-  <div className="mb-4 font-semibold text-lg">
-    Aktueller Zug:{" "}
-    <span className="text-indigo-600">
-      {players[turnIndex]}
-    </span>{" "}
-    (Team {teams.findIndex((t) => t.includes(players[turnIndex])) + 1})
+{teams && (
+  <div className="grid grid-cols-2 gap-6 mb-6">
+    {teams.map((teamPlayers: string[], i: number) => (
+      <div
+        key={i}
+        className={`p-4 rounded-xl shadow-md hover:shadow-xl transition
+          ${i === 0 ? "bg-red-100" : "bg-blue-100"}`}
+      >
+        <h2 className={`font-semibold mb-2 text-${i === 0 ? "red" : "blue"}-700`}>
+          Team {i + 1} - Punkte: {scores[i] ?? 0}
+        </h2>
+        {teamPlayers.map((name: string) => (
+          <p key={name} className="select-none">{name}</p>
+        ))}
+        <div className="flex space-x-2 mt-2">
+          {/* Beispiel für 10 Becher */}
+          {[...Array(10)].map((_, idx) => (
+            <div
+              key={idx}
+              className={`w-6 h-6 rounded-full border-2
+                ${
+                  idx < (scores[i] ?? 0)
+                    ? i === 0
+                      ? "bg-red-600 border-red-800"
+                      : "bg-blue-600 border-blue-800"
+                    : "bg-gray-300 border-gray-400"
+                }`}
+            />
+          ))}
+        </div>
+      </div>
+    ))}
   </div>
 )}
+
 
 
             {/* Cups */}
